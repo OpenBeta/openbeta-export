@@ -1,0 +1,58 @@
+name: "Export OpenBeta Data"
+on:
+  workflow_dispatch:
+#  schedule:
+#    - cron: "0 0 * * *" # Run every day at midnight
+jobs:
+  export:
+    name: Export OpenBeta Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add IP address to trusted source (managed database)
+        uses: GarreauArthur/manage-digital-ocean-managed-database-trusted-sources-gh-action@main
+        with:
+          action: "add"
+          database_id: ${{ secrets.DATABASE_ID }}
+          digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - uses: actions/checkout@v3
+        name: Checkout openbeta-graphql
+        with:
+          name: openbeta/openbeta-graphql
+          ref: refs/heads/develop
+          path: openbeta-graphql
+
+      - uses: actions/checkout@v3
+        name: Checkout openbeta-export
+        with:
+          path: export
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Export data
+        run: yarn export:json:full --output "$GITHUB_WORKSPACE/export/"
+        env:
+          MONGO_SCHEME: ${{ secrets.MONGO_SCHEME }}
+          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          MONGO_SERVICE: ${{ secrets.MONGO_SERVICE }}
+          MONGO_AUTHDB: ${{ secrets.MONGO_AUTHDB }}
+          MONGO_DBNAME: ${{ secrets.MONGO_DBNAME }}
+          MONGO_TLS: true
+          MONGO_READ_PREFERENCE: primary
+          MONGO_REPLICA_SET_NAME: ${{ secrets.MONGO_REPLICA_SET_NAME }}
+
+      - uses: EndBug/add-and-commit@v9
+        with:
+          author_name: OpenBeta Export
+          cwd: "$GITHUB_WORKSPACE/export/"
+          message: 'export openbeta data'
+
+      - name: Remove IP address from trusted source (managed database)
+        uses: GarreauArthur/manage-digital-ocean-managed-database-trusted-sources-gh-action@main
+        if: always()
+        with:
+          action: "remove"
+          database_id: ${{ secrets.DATABASE_ID }}
+          digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
